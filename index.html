@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking d'objets avec IA embarquée et filtres de Kalman</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        .content {
+            padding: 30px;
+        }
+        .section {
+            margin-bottom: 40px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            border-left: 5px solid #3498db;
+        }
+        .section h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+        .diagram-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .flow-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .flow-step {
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            text-align: center;
+            flex: 1;
+            min-width: 150px;
+            font-weight: bold;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+        .flow-step:hover {
+            transform: translateY(-5px);
+        }
+        .arrow {
+            font-size: 24px;
+            color: #74b9ff;
+            font-weight: bold;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            font-weight: bold;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .comparison-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-top: 4px solid #e74c3c;
+        }
+        .comparison-card.kalman {
+            border-top-color: #27ae60;
+        }
+        .comparison-card.extended {
+            border-top-color: #f39c12;
+        }
+        .comparison-card.particle {
+            border-top-color: #9b59b6;
+        }
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            margin: 20px 0;
+        }
+        .key-points {
+            background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .key-points h3 {
+            margin-top: 0;
+            color: white;
+        }
+        .benefits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .benefit-item {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .benefit-item:hover {
+            transform: translateY(-5px);
+        }
+        .benefit-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        .algorithm-visualization {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .algorithm-step {
+            background: white;
+            border: 3px solid #3498db;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            min-width: 200px;
+            position: relative;
+        }
+        .algorithm-step::after {
+            content: "→";
+            position: absolute;
+            right: -30px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 24px;
+            color: #3498db;
+            font-weight: bold;
+        }
+        .algorithm-step:last-child::after {
+            display: none;
+        }
+        @media (max-width: 768px) {
+            .flow-diagram {
+                flex-direction: column;
+            }
+            .arrow {
+                transform: rotate(90deg);
+            }
+            .algorithm-step::after {
+                content: "↓";
+                right: 50%;
+                top: 100%;
+                transform: translateX(50%);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Tracking d'objets avec IA embarquée</h1>
+            <p>Filtres de Kalman pour drones - Robustesse et performance en temps réel</p>
+        </div>
+
+        <div class="content">
+            <!-- Section 1: Contexte et défis -->
+            <div class="section">
+                <h2>1. 🚁 Contexte et défis du tracking embarqué</h2>
+                
+                <div class="benefits-grid">
+                    <div class="benefit-item">
+                        <div class="benefit-icon">📡</div>
+                        <h3>Mesures bruitées</h3>
+                        <p>GPS, capteurs inertiels, vision avec incertitudes importantes</p>
+                    </div>
+                    <div class="benefit-item">
+                        <div class="benefit-icon">📶</div>
+                        <h3>Pertes de signal</h3>
+                        <p>Zones urbaines, interférences, occultations temporaires</p>
+                    </div>
+                    <div class="benefit-item">
+                        <div class="benefit-icon">🔄</div>
+                        <h3>Dynamiques variables</h3>
+                        <p>Trajectoires complexes, manœuvres imprévisibles</p>
+                    </div>
+                    <div class="benefit-item">
+                        <div class="benefit-icon">⚡</div>
+                        <h3>Ressources limitées</h3>
+                        <p>CPU, mémoire, énergie contraints sur plateforme embarquée</p>
+                    </div>
+                </div>
+
+                <div class="key-points">
+                    <h3>🎯 Objectif</h3>
+                    <p><strong>Estimateur robuste et léger</strong> pour une estimation fiable et continue de la position/vitesse de cible, optimisé pour l'embarqué.</p>
+                </div>
+            </div>
+
+            <!-- Section 2: Principe du filtre de Kalman -->
+            <div class="section">
+                <h2>2. 🧠 Principe du filtre de Kalman</h2>
+                
+                <div class="diagram-container">
+                    <h3>Cycle de fonctionnement</h3>
+                    <div class="algorithm-visualization">
+                        <div class="algorithm-step">
+                            <h4>📊 État précédent</h4>
+                            <p>Position, vitesse<br>+ incertitude</p>
+                        </div>
+                        <div class="algorithm-step">
+                            <h4>🔮 Prédiction</h4>
+                            <p>Modèle dynamique<br>x(k+1) = F·x(k)</p>
+                        </div>
+                        <div class="algorithm-step">
+                            <h4>📡 Mesure</h4>
+                            <p>Capteur GPS/vision<br>+ bruit</p>
+                        </div>
+                        <div class="algorithm-step">
+                            <h4>✅ Correction</h4>
+                            <p>Fusion optimale<br>prédiction + mesure</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="diagram-container">
+                    <h3>Équations fondamentales</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Étape</th>
+                                <th>Équation</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Prédiction</strong></td>
+                                <td>x̂(k|k-1) = F·x̂(k-1|k-1)</td>
+                                <td>Estimation a priori basée sur le modèle</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Covariance</strong></td>
+                                <td>P(k|k-1) = F·P(k-1|k-1)·F<sup>T</sup> + Q</td>
+                                <td>Propagation de l'incertitude + bruit processus</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Gain de Kalman</strong></td>
+                                <td>K(k) = P(k|k-1)·H<sup>T</sup>·[H·P(k|k-1)·H<sup>T</sup> + R]<sup>-1</sup></td>
+                                <td>Pondération optimale mesure vs prédiction</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Correction</strong></td>
+                                <td>x̂(k|k) = x̂(k|k-1) + K(k)·[z(k) - H·x̂(k|k-1)]</td>
+                                <td>Estimation finale après fusion</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="diagram-container">
+                    <canvas id="kalmanChart" width="800" height="400"></canvas>
+                </div>
+            </div>
+
+            <!-- Section 3: Intérêt pour les drones -->
+            <div class="section">
+                <h2>3. 🚁 Valeur ajoutée pour les drones</h2>
+                
+                <div class="comparison-grid">
+                    <div class="comparison-card">
+                        <h3>❌ Sans filtre de Kalman</h3>
+                        <ul>
+                            <li>Trajectoire chaotique due au bruit GPS</li>
+                            <li>Pertes de cible lors d'occultations</li>
+                            <li>Réactions excessives aux fausses mesures</li>
+                            <li>Instabilité du système de guidage</li>
+                        </ul>
+                    </div>
+                    <div class="comparison-card kalman">
+                        <h3>✅ Avec filtre de Kalman</h3>
+                        <ul>
+                            <li>Trajectoire lissée et cohérente</li>
+                            <li>Continuité pendant les pertes de signal</li>
+                            <li>Rejet intelligent du bruit</li>
+                            <li>Guidage stable et prévisible</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="diagram-container">
+                    <h3>Performance comparative</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Métrique</th>
+                                <th>GPS brut</th>
+                                <th>Avec Kalman</th>
+                                <th>Amélioration</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Précision position (m)</td>
+                                <td>±5-10</td>
+                                <td>±1-2</td>
+                                <td><span style="color: #27ae60;">75-80%</span></td>
+                            </tr>
+                            <tr>
+                                <td>Stabilité trajectoire</td>
+                                <td>Chaotique</td>
+                                <td>Lisse</td>
+                                <td><span style="color: #27ae60;">Qualitative</span></td>
+                            </tr>
+                            <tr>
+                                <td>Résilience aux pertes</td>
+                                <td>0%</td>
+                                <td>95%</td>
+                                <td><span style="color: #27ae60;">Critique</span></td>
+                            </tr>
+                            <tr>
+                                <td>Latence (ms)</td>
+                                <td>~100</td>
+                                <td>~105</td>
+                                <td><span style="color: #f39c12;">+5%</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Section 4: Variantes et adaptations -->
+            <div class="section">
+                <h2>4. 🔧 Variantes et adaptations</h2>
+                
+                <div class="comparison-grid">
+                    <div class="comparison-card kalman">
+                        <h3>📐 Kalman Linéaire</h3>
+                        <p><strong>Usage :</strong> Trajectoires rectilignes</p>
+                        <p><strong>Avantages :</strong> Simple, rapide, optimal</p>
+                        <p><strong>Limite :</strong> Modèle linéaire uniquement</p>
+                        <p><strong>CPU :</strong> Très faible (~1ms)</p>
+                    </div>
+                    <div class="comparison-card extended">
+                        <h3>🌀 EKF (Extended)</h3>
+                        <p><strong>Usage :</strong> Trajectoires courbes, manœuvres</p>
+                        <p><strong>Avantages :</strong> Gère la non-linéarité</p>
+                        <p><strong>Limite :</strong> Approximation linéaire locale</p>
+                        <p><strong>CPU :</strong> Modéré (~5ms)</p>
+                    </div>
+                    <div class="comparison-card">
+                        <h3>🎲 UKF (Unscented)</h3>
+                        <p><strong>Usage :</strong> Forte non-linéarité</p>
+                        <p><strong>Avantages :</strong> Plus stable que EKF</p>
+                        <p><strong>Limite :</strong> Plus complexe</p>
+                        <p><strong>CPU :</strong> Élevé (~15ms)</p>
+                    </div>
+                    <div class="comparison-card particle">
+                        <h3>🌊 Filtres particulaires</h3>
+                        <p><strong>Usage :</strong> Incertitudes multimodales</p>
+                        <p><strong>Avantages :</strong> Très flexible</p>
+                        <p><strong>Limite :</strong> Très coûteux</p>
+                        <p><strong>CPU :</strong> Prohibitif (>100ms)</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 5: Applications pratiques -->
+            <div class="section">
+                <h2>5. 🎯 Applications démontrées</h2>
+                
+                <div class="diagram-container">
+                    <h3>Architecture système embarqué</h3>
+                    <div class="flow-diagram">
+                        <div class="flow-step">
+                            <strong>Capteurs</strong><br>
+                            GPS, IMU, Caméra
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="flow-step">
+                            <strong>Préprocessing</strong><br>
+                            Détection IA, Calibration
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="flow-step">
+                            <strong>Filtre Kalman</strong><br>
+                            Fusion multi-capteurs
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="flow-step">
+                            <strong>Sortie</strong><br>
+                            Position stabilisée
+                        </div>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Application</th>
+                            <th>Capteurs utilisés</th>
+                            <th>Type de filtre</th>
+                            <th>Performance clé</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Suivi drone civil</td>
+                            <td>GPS + IMU</td>
+                            <td>Kalman linéaire</td>
+                            <td>Précision ±1m en continu</td>
+                        </tr>
+                        <tr>
+                            <td>Tracking vision embarquée</td>
+                            <td>Caméra + IMU</td>
+                            <td>EKF</td>
+                            <td>30 FPS avec suivi robuste</td>
+                        </tr>
+                        <tr>
+                            <td>Surveillance militaire</td>
+                            <td>Radar + GPS + Vision</td>
+                            <td>UKF</td>
+                            <td>Résistance brouillage 95%</td>
+                        </tr>
+                        <tr>
+                            <td>Renesas (démo)</td>
+                            <td>GPS simulé + bruit</td>
+                            <td>Kalman optimisé</td>
+                            <td>Temps réel <2ms sur MCU</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Section 6: Implémentation embarquée -->
+            <div class="section">
+                <h2>6. 💾 Optimisation embarquée</h2>
+                
+                <div class="diagram-container">
+                    <h3>Ressources requises (exemple Renesas)</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                        <div style="text-align: center; background: #ecf0f1; padding: 20px; border-radius: 10px;">
+                            <h4>💽 Mémoire RAM</h4>
+                            <div style="font-size: 2em; color: #27ae60;">~2 KB</div>
+                            <p>Matrices d'état + covariance</p>
+                        </div>
+                        <div style="text-align: center; background: #ecf0f1; padding: 20px; border-radius: 10px;">
+                            <h4>⚡ CPU Usage</h4>
+                            <div style="font-size: 2em; color: #f39c12;">~5%</div>
+                            <p>@100MHz, cycle 10ms</p>
+                        </div>
+                        <div style="text-align: center; background: #ecf0f1; padding: 20px; border-radius: 10px;">
+                            <h4>🕐 Latence</h4>
+                            <div style="font-size: 2em; color: #3498db;">1-2 ms</div>
+                            <p>Traitement temps réel</p>
+                        </div>
+                    </div>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Optimisation</th>
+                            <th>Technique</th>
+                            <th>Gain performance</th>
+                            <th>Impact précision</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Arithmétique fixe</td>
+                            <td>Int32 au lieu de float</td>
+                            <td>3x plus rapide</td>
+                            <td>Négligeable si bien calibré</td>
+                        </tr>
+                        <tr>
+                            <td>Matrices creuses</td>
+                            <td>Exploitation des zéros</td>
+                            <td>2x réduction mémoire</td>
+                            <td>Aucun</td>
+                        </tr>
+                        <tr>
+                            <td>Prédiction adaptative</td>
+                            <td>Fréquence variable</td>
+                            <td>50% CPU en moins</td>
+                            <td>Amélioration dynamique</td>
+                        </tr>
+                        <tr>
+                            <td>Fusion asynchrone</td>
+                            <td>Capteurs à fréquences différentes</td>
+                            <td>Utilisation optimale</td>
+                            <td>Meilleure robustesse</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Section 7: Fusion IA + Kalman -->
+            <div class="section">
+                <h2>7. 🤖 Intégration IA + Kalman</h2>
+                
+                <div class="diagram-container">
+                    <h3>Pipeline hybride intelligent</h3>
+                    <div class="flow-diagram">
+                        <div class="flow-step">
+                            <strong>🎥 Vision</strong><br>
+                            Flux vidéo brut
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="flow-step">
+                            <strong>🧠 CNN</strong><br>
+                            Détection + localisation
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="flow-step">
+                            <strong>🔧 Kalman</strong><br>
+                            Tracking robuste
+                        </div>
+                        <div class="arrow">→</div>
+                        <div class="flow-step">
+                            <strong>📍 Output</strong><br>
+                            Position stabilisée
+                        </div>
+                    </div>
+                </div>
+
+                <div class="comparison-grid">
+                    <div class="comparison-card">
+                        <h3>🧠 Rôle de l'IA</h3>
+                        <ul>
+                            <li><strong>Détection :</strong> Identification de la cible</li>
+                            <li><strong>Classification :</strong> Type d'objet suivi</li>
+                            <li><strong>Segmentation :</strong> Contours précis</li>
+                            <li><strong>Prédiction :</strong> Comportement attendu</li>
+                        </ul>
+                    </div>
+                    <div class="comparison-card kalman">
+                        <h3>🎯 Rôle du Kalman</h3>
+                        <ul>
+                            <li><strong>Fusion :</strong> Multi-capteurs optimale</li>
+                            <li><strong>Lissage :</strong> Trajectoire cohérente</li>
+                            <li><strong>Prédiction :</strong> Continuité temporelle</li>
+                            <li><strong>Robustesse :</strong> Gestion des outliers</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 8: Arguments techniques -->
+            <div class="section">
+                <h2>8. 💡 Points clés pour l'entretien</h2>
+                
+                <div class="key-points">
+                    <h3>🏆 Arguments techniques forts</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+                        <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px;">
+                            <h4>📈 Standard industriel</h4>
+                            <p>Référence absolue en aéronautique depuis 50 ans, validation NASA/ESA</p>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px;">
+                            <h4>🛡️ Robustesse critique</h4>
+                            <p>Fonctionnement en environnements dégradés, applications militaires</p>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px;">
+                            <h4>⚡ Embarqué optimisé</h4>
+                            <p>Faible empreinte mémoire/CPU, temps réel garanti</p>
+                        </div>
+                        <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px;">
+                            <h4>🔬 Base scientifique</h4>
+                            <p>Optimum mathématique au sens des moindres carrés</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="diagram-container">
+                    <h3>Mots-clés techniques essentiels</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Catégorie</th>
+                                <th>Termes clés</th>
+                                <th>Impact business</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Algorithme</strong></td>
+                                <td>Prédiction/Correction, Gain optimal, Covariance</td>
+                                <td>Expertise technique démontrée</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Performance</strong></td>
+                                <td>Temps réel, Robustesse, Bruit capteur</td>
+                                <td>Fiabilité mission critique</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Embarqué</strong></td>
+                                <td>MCU, Optimisation mémoire, Low-power</td>
+                                <td>Réduction coûts matériel</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Innovation</strong></td>
+                                <td>Fusion IA-Kalman, Multi-capteurs, Adaptatif</td>
+                                <td>Différenciation concurrentielle</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Section 9: Résultats concrets -->
+            <div class="section">
+                <h2>9. 📊 Résultats et ROI</h2>
+                
+                <div class="diagram-container">
+                    <canvas id="performanceChart" width="800" height="400"></canvas>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0;">
+                    <div style="background: linear-gradient(135deg, #00b894 0%, #00cec9 100%); color: white; padding: 20px; border-radius: 10px; text-align: center;">
+                        <h3>💰 Réduction coûts</h3>
+                        <div style="font-size: 2em; font-weight: bold;">-40%</div>
+                        <p>Matériel capteurs grâce à la robustesse logicielle</p>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #fd79a8 0%, #f
